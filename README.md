@@ -16,7 +16,7 @@ Install [gabime/spdlog](https://github.com/gabime/spdlog), e.g. by running:
 ```bash
 git clone https://github.com/gabime/spdlog.git
 cd spdlog && mkdir build && cd build
-cmake ..
+cmake .. && make -j
 sudo make install
 ```
 
@@ -26,7 +26,7 @@ Install
 ``` bash
 git clone https://git.soton.ac.uk/sts1u16/gdb-server.git
 cd gdb-server && mkdir build && cd build
-cmake ..
+cmake .. && make -j
 sudo make install
 ```
 
