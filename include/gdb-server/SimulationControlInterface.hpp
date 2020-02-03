@@ -109,20 +109,20 @@ class SimulationControlInterface {
    * register is the PC.
    * @retval register number of the program counter.
    */
-  virtual const uint32_t pcRegNum() = 0;
+  virtual uint32_t pcRegNum() = 0;
 
   /**
    * @brief n_regs get the number of general purpose registers.
    * @retval how many general purpose registers the target has (including PC,
    * SP, LR etc.)
    */
-  virtual const uint32_t nRegs() = 0;
+  virtual uint32_t nRegs() = 0;
 
   /**
    * @brief wordSize
    * @retval word size of target platform (in bytes)
    */
-  virtual const uint32_t wordSize() = 0;
+  virtual uint32_t wordSize() = 0;
 
   // ------ Control debugger ------
 
