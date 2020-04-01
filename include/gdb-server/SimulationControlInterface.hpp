@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2018-2020, University of Southampton.
+ * All rights reserved.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+
 #pragma once
 
 #include <cstdint>
