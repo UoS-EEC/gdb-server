@@ -24,7 +24,7 @@ Install
 -----------------------------------
 
 ``` bash
-git clone https://git.soton.ac.uk/sts1u16/gdb-server.git
+git clone https://github.com/UoS-EEC/gdb-server.git
 cd gdb-server && mkdir build && cd build
 cmake .. && make -j
 sudo make install
