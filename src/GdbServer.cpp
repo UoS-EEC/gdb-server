@@ -32,7 +32,6 @@
 #include <iostream>
 #include <thread>
 
-using std::cerr;
 using std::dec;
 using std::endl;
 using std::hex;
@@ -61,7 +60,7 @@ void GdbServer::serverThread() {
       // Reconnect and stall the processor on a new connection
       if (!rsp->rspConnect()) {
         // Serious failure. Must abort execution.
-        cerr << "*** Unable to continue: ABORTING" << endl;
+        spdlog::error("*** Unable to continue: ABORTING");
         exit(1);
       }
 
@@ -128,21 +127,20 @@ void GdbServer::rspClientRequest() {
 
     case 'A':
       // Initialization of argv not supported
-      cerr << "Warning: RSP 'A' packet not supported: ignored" << endl;
+      spdlog::warn("RSP 'A' packet not supported: ignored");
       pkt->packStr("E01");
       rsp->putPkt(pkt);
       return;
 
     case 'b':
       // Setting baud rate is deprecated
-      cerr << "Warning: RSP 'b' packet is deprecated and not "
-           << "supported: ignored" << endl;
+      spdlog::warn("RSP 'b' packet not supported: ignored");
       return;
 
     case 'B':
       // Breakpoints should be set using Z packets
-      cerr << "Warning: RSP 'B' packet is deprecated (use 'Z'/'z' "
-           << "packets instead): ignored" << endl;
+      spdlog::warn("RSP 'B' packet is deprecated (use 'Z'/'z' "
+                   "packets instead): ignored");
       return;
 
     case 'c':
@@ -157,8 +155,8 @@ void GdbServer::rspClientRequest() {
 
     case 'd':
       // Disable debug using a general query
-      cerr << "Warning: RSP 'd' packet is deprecated (define a 'Q' "
-           << "packet instead: ignored" << endl;
+      spdlog::warn("RSP 'd' packet is deprecated (define a 'Q' "
+                   "packet instead: ignored");
       return;
 
     case 'D':
@@ -172,8 +170,7 @@ void GdbServer::rspClientRequest() {
 
     case 'F':
       // File I/O is not currently supported
-      cerr << "Warning: RSP file I/O not currently supported: 'F' "
-           << "packet ignored" << endl;
+      spdlog::warn("RSP 'F' packet not supported: ignored");
       return;
 
     case 'g':
@@ -196,8 +193,8 @@ void GdbServer::rspClientRequest() {
       // Single cycle step not currently supported. Mark the target as
       // running, so that next time it will be detected as stopped (it is
       // still stalled in reality) and an ack sent back to the client.
-      cerr << "Warning: RSP cycle stepping not supported: target "
-           << "stopped immediately" << endl;
+      spdlog::warn("RSP cycle stepping not supported: target stopped "
+                   "immediately");
       targetStopped = false;
       return;
 
@@ -240,8 +237,8 @@ void GdbServer::rspClientRequest() {
 
     case 'r':
       // Reset the system. Deprecated (use 'R' instead)
-      cerr << "Warning: RSP 'r' packet is deprecated (use 'R' "
-           << "packet instead): ignored" << endl;
+      spdlog::warn("RSP 'r' packet is deprecated (use 'R' "
+                   "packet instead): ignored");
       return;
 
     case 'R':
@@ -262,7 +259,7 @@ void GdbServer::rspClientRequest() {
     case 't':
       // Search. This is not well defined in the manual and for now we don't
       // support it. No response is defined.
-      cerr << "Warning: RSP 't' packet not supported: ignored" << endl;
+      spdlog::warn("RSP 't' packet not supported: ignored");
       return;
 
     case 'T':
@@ -294,7 +291,7 @@ void GdbServer::rspClientRequest() {
 
     default:
       // Unknown commands are ignored
-      cerr << "Warning: Unknown RSP request" << pkt->data << endl;
+      spdlog::warn("RSP unknown request ({}) ignored", pkt->data[0]);
       return;
   }
 }  // rspClientRequest ()
@@ -331,8 +328,7 @@ void GdbServer::rspContinue(uint32_t except) {
 
   // Reject all except 'c' packets
   if ('c' != pkt->data[0]) {
-    cerr << "Warning: Continue with signal not currently supported: "
-         << "ignored" << endl;
+    spdlog::warn("RSP continue with signal not currently supported: ignored");
     return;
   }
 
@@ -340,8 +336,7 @@ void GdbServer::rspContinue(uint32_t except) {
   if (0 == strcmp("c", pkt->data)) {
     // Proceed
   } else if (1 != sscanf(pkt->data, "c%x", &addr)) {
-    cerr << "Warning: RSP continue address " << pkt->data
-         << " not recognized: ignored" << endl;
+    spdlog::warn("RSP continue address {} not recognized: ignored", pkt->data);
   }
   addr = m_simCtrl->readReg(m_simCtrl->pcRegNum());  // Default uses current PC
 
@@ -356,8 +351,8 @@ void GdbServer::rspContinue(uint32_t except) {
 //!       function.
 //-----------------------------------------------------------------------------
 void GdbServer::rspContinue() {
-  cerr << "RSP continue with signal '" << pkt->data << "' received" << endl;
-
+  spdlog::warn("RSP continue with signal '{}' not currently supported: ignored",
+               pkt->data);
 }  // rspContinue ()
 
 //-----------------------------------------------------------------------------
@@ -433,8 +428,8 @@ void GdbServer::rspReadMem() {
   int off;            // Offset into the memory
 
   if (2 != sscanf(pkt->data, "m%x,%x:", &addr, &len)) {
-    cerr << "Warning: Failed to recognize RSP read memory command: "
-         << pkt->data << endl;
+    spdlog::warn("RSP read memory command '{}' not recognized: ignored",
+                 pkt->data);
     pkt->packStr("E01");
     rsp->putPkt(pkt);
     return;
@@ -442,8 +437,8 @@ void GdbServer::rspReadMem() {
 
   // Make sure we won't overflow the buffer (2 chars per byte)
   if ((len * 2) >= pkt->getBufSize()) {
-    cerr << "Warning: Memory read " << pkt->data
-         << " too large for RSP packet: truncated" << endl;
+    spdlog::warn("RSP read memory command '{}' too large for packet: truncated",
+                 pkt->data);
     len = (pkt->getBufSize() - 1) / 2;
   }
 
@@ -481,8 +476,8 @@ void GdbServer::rspWriteMem() {
   int len;        // Number of bytes to write
 
   if (2 != sscanf(pkt->data, "M%x,%x:", &addr, &len)) {
-    cerr << "Warning: Failed to recognize RSP write memory " << pkt->data
-         << endl;
+    spdlog::warn("Failed to recognize RSP write memory ({})",
+                 pkt->data);
     pkt->packStr("E01");
     rsp->putPkt(pkt);
     return;
@@ -494,8 +489,8 @@ void GdbServer::rspWriteMem() {
 
   // Sanity check
   if (len * 2 != datLen) {
-    cerr << "Warning: Write of " << len * 2 << "digits requested, but "
-         << datLen << " digits supplied: packet ignored" << endl;
+    spdlog::warn("Write of {} digits requested, but {} digits supplied: packet ignored",
+                 len * 2, datLen);
     pkt->packStr("E01");
     rsp->putPkt(pkt);
     return;
@@ -524,8 +519,8 @@ void GdbServer::rspReadReg() {
 
   // Break out the fields from the data
   if (1 != sscanf(pkt->data, "p%x", &regNum)) {
-    cerr << "Warning: Failed to recognize RSP read register command: "
-         << pkt->data << endl;
+    spdlog::warn("Failed to recognize RSP read register command: {}",
+                 pkt->data);
     pkt->packStr("E01");
     rsp->putPkt(pkt);
     return;
@@ -548,8 +543,8 @@ void GdbServer::rspWriteReg() {
 
   // Break out the fields from the data
   if (2 != sscanf(pkt->data, "P%x=%8s", &regNum, valstr)) {
-    cerr << "Warning: Failed to recognize RSP write register command "
-         << pkt->data << endl;
+    spdlog::warn("Failed to recognize RSP write register command: {}",
+                 pkt->data);
     pkt->packStr("E01");
     rsp->putPkt(pkt);
     return;
@@ -573,7 +568,7 @@ void GdbServer::rspQuery() {
     rsp->putPkt(pkt);
   } else if (0 == strncmp("qCRC", pkt->data, strlen("qCRC"))) {
     // Return CRC of memory area
-    cerr << "Warning: RSP CRC query not supported" << endl;
+    spdlog::warn("RSP CRC query not supported");
     pkt->packStr("E01");
     rsp->putPkt(pkt);
   } else if (0 == strcmp("qfThreadInfo", pkt->data)) {
@@ -592,7 +587,7 @@ void GdbServer::rspQuery() {
     rsp->putPkt(pkt);
   } else if (0 == strncmp("qL", pkt->data, strlen("qL"))) {
     // Deprecated and replaced by 'qfThreadInfo'
-    cerr << "Warning: RSP qL deprecated: no info returned" << endl;
+    spdlog::warn("RSP qL deprecated: no info returned");
     pkt->packStr("qM001");
     rsp->putPkt(pkt);
   } else if (0 == strcmp("qOffsets", pkt->data)) {
@@ -602,12 +597,12 @@ void GdbServer::rspQuery() {
     rsp->putPkt(pkt);
   } else if (0 == strncmp("qP", pkt->data, strlen("qP"))) {
     // Deprecated and replaced by 'qThreadExtraInfo'
-    cerr << "Warning: RSP qP deprecated: no info returned" << endl;
+    spdlog::warn("RSP qP deprecated: no info returned");
     pkt->packStr("");
     rsp->putPkt(pkt);
   } else if (0 == strncmp("qRcmd,", pkt->data, strlen("qRcmd,"))) {
     // "Passed to the local interpreter for execution"
-    cerr << "Warning: RSP qRcmd not supported." << endl;
+    spdlog::warn("RSP qRcmd not supported");
     pkt->packStr("");
     rsp->putPkt(pkt);
   } else if (0 == strncmp("qSupported", pkt->data, strlen("qSupported"))) {
@@ -636,7 +631,7 @@ void GdbServer::rspQuery() {
   } else if (0 == strncmp("qXfer:", pkt->data, strlen("qXfer:"))) {
     // For now we support no 'qXfer' requests, but these should not be
     // expected, since they were not reported by 'qSupported'
-    cerr << "Warning: RSP 'qXfer' not supported: ignored" << endl;
+    spdlog::warn("RSP qXfer not supported");
     pkt->packStr("");
     rsp->putPkt(pkt);
   } else if (0 == strncmp("qAttached", pkt->data, strlen("qAttached"))) {
@@ -659,7 +654,7 @@ void GdbServer::rspQuery() {
     pkt->packStr("");
     rsp->putPkt(pkt);
   } else {
-    cerr << "Unrecognized RSP query: ignored" << endl;
+    spdlog::warn("Unrecognized RSP query ({}) ignored", pkt->data);
   }
 }  // rspQuery ()
 
@@ -784,7 +779,7 @@ void GdbServer::rspSet() {
     pkt->packStr("");
     rsp->putPkt(pkt);
   } else {
-    cerr << "Unrecognized RSP set request: ignored" << endl;
+    spdlog::warn("Unrecognized RSP set request: ignored");
     delete pkt;
   }
 }  // rspSet ()
@@ -812,15 +807,14 @@ void GdbServer::rspStep(uint32_t except) {
 
   // Reject all except 's' packets
   if ('s' != pkt->data[0]) {
-    cerr << "Warning: Step with signal not currently supported: "
-         << "ignored" << endl;
+    spdlog::warn("GdbServer.cpp: Step with signal not currently supported: ignored");
     return;
   }
 
   if (0 == strcmp("s", pkt->data)) {
     // No address supplied, use PC
   } else if (1 != sscanf(pkt->data, "s%x", &addr)) {
-    cerr << "Warning: RSP step address " << pkt->data << " not ignored" << endl;
+    spdlog::warn("GdbServer.cpp: RSP step address {} not recognized", pkt->data);
     // Still just use PC
   }
   addr = m_simCtrl->readReg(m_simCtrl->pcRegNum());
@@ -873,39 +867,36 @@ void GdbServer::rspVpkt() {
   } else if (0 == strncmp("vCont", pkt->data, strlen("vCont"))) {
     // This shouldn't happen, because we've reported non-support via vCont?
     // above
-    cerr << "Warning: RSP vCont not supported: ignored" << endl;
+    spdlog::warn("GdbServer.cpp: RSP vCont not supported: ignored");
     return;
   } else if (0 == strncmp("vFile:", pkt->data, strlen("vFile:"))) {
     // For now we don't support this.
-    cerr << "Warning: RSP vFile not supported: ignored" << endl;
+    spdlog::warn("GdbServer.cpp: RSP vFile not supported: ignored");
     pkt->packStr("");
     rsp->putPkt(pkt);
     return;
   } else if (0 == strncmp("vFlashErase:", pkt->data, strlen("vFlashErase:"))) {
     // For now we don't support this.
-    cerr << "Warning: RSP vFlashErase not supported: ignored" << endl;
+    spdlog::warn("GdbServer.cpp: RSP vFlashErase not supported: ignored");
     pkt->packStr("E01");
     rsp->putPkt(pkt);
     return;
   } else if (0 == strncmp("vFlashWrite:", pkt->data, strlen("vFlashWrite:"))) {
     // For now we don't support this.
-    cerr << "Warning: RSP vFlashWrite not supported: ignored" << endl;
+    spdlog::warn("GdbServer.cpp: RSP vFlashWrite not supported: ignored");
     pkt->packStr("E01");
     rsp->putPkt(pkt);
     return;
   } else if (0 == strcmp("vFlashDone", pkt->data)) {
     // For now we don't support this.
-    cerr << "Warning: RSP vFlashDone not supported: ignored" << endl;
-    ;
+    spdlog::warn("GdbServer.cpp: RSP vFlashDone not supported: ignored");
     pkt->packStr("E01");
     rsp->putPkt(pkt);
     return;
   } else if (0 == strncmp("vRun;", pkt->data, strlen("vRun;"))) {
     // We shouldn't be given any args, but check for this
     if (pkt->getLen() > strlen("vRun;")) {
-      cerr << "Warning: Unexpected arguments to RSP vRun "
-              "command: ignored"
-           << endl;
+      spdlog::warn("Unexpected arguments to RSP vRun command: ignored");
     }
 
     // Restart the current program. However unlike a "R" packet, "vRun"
@@ -973,8 +964,9 @@ void GdbServer::rspWriteMemBin() {
   if (newLen != len) {
     int minLen = len < newLen ? len : newLen;
 
-    cerr << "Warning: Write of " << len << " bytes requested, but " << newLen
-         << " bytes supplied. " << minLen << " will be written" << endl;
+    spdlog::warn("Write of {:d} bytes requested, but {:d} bytes supplied. "
+                 "{:d} will be written",
+                 len, newLen, minLen);
     len = minLen;
   } else if (len == 0) {
     spdlog::warn("Client requested 0-byte write to memory, ignoring.");
@@ -1002,8 +994,7 @@ void GdbServer::rspRemoveMatchpoint() {
 
   // Break out the instruction
   if (3 != sscanf(pkt->data, "z%1d,%x,%1d", (int *)&type, &addr, &len)) {
-    cerr << "Warning: RSP matchpoint deletion request not "
-         << "recognized: ignored" << endl;
+    spdlog::warn("RSP matchpoint deletion request not recognized: ignored");
     pkt->packStr("E01");
     rsp->putPkt(pkt);
     return;
@@ -1011,8 +1002,7 @@ void GdbServer::rspRemoveMatchpoint() {
 
   // Sanity check that the length is 2
   if (2 != len) {
-    cerr << "Warning: RSP matchpoint deletion length " << len
-         << "not valid: 2 assumed" << endl;
+    spdlog::warn("RSP matchpoint deletion length {:d} not valid: 2 assumed", len);
     len = 2;
   }
 
@@ -1047,8 +1037,7 @@ void GdbServer::rspRemoveMatchpoint() {
       return;
 
     default:
-      cerr << "Warning: RSP matchpoint type " << type
-           << " not recognized: ignored" << endl;
+      spdlog::warn("RSP matchpoint type {:d} not recognized: ignored", type);
       pkt->packStr("E01");
       rsp->putPkt(pkt);
       return;
@@ -1069,8 +1058,7 @@ void GdbServer::rspInsertMatchpoint() {
 
   // Break out the instruction
   if (3 != sscanf(pkt->data, "Z%1d,%x,%1d", (int *)&type, &addr, &len)) {
-    cerr << "Warning: RSP matchpoint insertion request not "
-         << "recognized: ignored" << endl;
+    spdlog::warn("RSP matchpoint insertion request not recognized: ignored");
     pkt->packStr("E01");
     rsp->putPkt(pkt);
     return;
@@ -1078,8 +1066,7 @@ void GdbServer::rspInsertMatchpoint() {
 
   // Sanity check that the length is 2
   if (2 != len) {
-    cerr << "Warning: RSP matchpoint insertion length " << len
-         << "not valid: 2 assumed" << endl;
+    spdlog::warn("RSP matchpoint insertion length {:d} not valid: 2 assumed", len);
     len = 2;
   }
 
@@ -1113,8 +1100,7 @@ void GdbServer::rspInsertMatchpoint() {
       return;
 
     default:
-      cerr << "Warning: RSP matchpoint type " << type
-           << "not recognized: ignored" << endl;
+      spdlog::warn("RSP matchpoint type {:d} not recognized: ignored", type);
       pkt->packStr("E01");
       rsp->putPkt(pkt);
       return;

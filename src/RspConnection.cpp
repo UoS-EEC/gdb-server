@@ -38,9 +38,8 @@
 #include <iomanip>
 #include <iostream>
 #include <string>
+#include <spdlog/spdlog.h>
 
-using std::cerr;
-using std::cout;
 using std::dec;
 using std::endl;
 using std::flush;
@@ -132,8 +131,8 @@ bool RspConnection::rspConnect() {
     struct servent *service = getservbyname(serviceName, "tcp");
 
     if (NULL == service) {
-      cerr << "ERROR: RSP unable to find service \"" << serviceName
-           << "\": " << strerror(errno) << endl;
+      spdlog::error("RSP unable to find service \"{}\": {}",
+                    serviceName, strerror(errno));
       return false;
     }
 
@@ -143,7 +142,7 @@ bool RspConnection::rspConnect() {
   // Open a socket on which we'll listen for clients
   int tmpFd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (tmpFd < 0) {
-    cerr << "ERROR: Cannot open RSP socket" << endl;
+    spdlog::error("Cannot open RSP socket: {}", strerror(errno));
     return false;
   }
 
@@ -152,31 +151,30 @@ bool RspConnection::rspConnect() {
   setsockopt(tmpFd, SOL_SOCKET, SO_REUSEADDR, (char *)&optval, sizeof(optval));
 
   // Bind the port to the socket
-  struct sockaddr_in sockAddr;
+  struct sockaddr_in sockAddr = {};
   sockAddr.sin_family = PF_INET;
   sockAddr.sin_port = htons(portNum);
   sockAddr.sin_addr.s_addr = INADDR_ANY;
 
   if (bind(tmpFd, (struct sockaddr *)&sockAddr, sizeof(sockAddr))) {
-    cerr << "ERROR: Cannot bind to RSP socket" << endl;
+    spdlog::error("Cannot bind to RSP socket");
     return false;
   }
 
   // Listen for (at most one) client
   if (listen(tmpFd, 1)) {
-    cerr << "ERROR: Cannot listen on RSP socket" << endl;
+    spdlog::error("Cannot listen on RSP socket");
     return false;
   }
 
-  cout << "Listening for RSP on port " << portNum << endl << flush;
+  spdlog::info("Listening for RSP on port {}", portNum);
 
   // Accept a client which connects
   socklen_t len = sizeof(sockAddr);  // Size of the socket address
   clientFd = accept(tmpFd, (struct sockaddr *)&sockAddr, &len);
 
   if (-1 == clientFd) {
-    cerr << "Warning: Failed to accept RSP client, failure code: " << errno
-         << endl;
+    spdlog::warn("Failed to accept RSP client, failure code: {}", errno);
     return true;  // OK to retry
   }
 
@@ -195,7 +193,7 @@ bool RspConnection::rspConnect() {
   close(tmpFd);              // No longer need this
   signal(SIGPIPE, SIG_IGN);  // So we don't exit if client dies
 
-  cout << "Remote debugging from host " << inet_ntoa(sockAddr.sin_addr) << endl;
+  spdlog::info("Remote debugging from host {}", inet_ntoa(sockAddr.sin_addr));
   return true;
 
 }  // rspConnect ()
@@ -205,7 +203,7 @@ bool RspConnection::rspConnect() {
 //-----------------------------------------------------------------------------
 void RspConnection::rspClose() {
   if (isConnected()) {
-    cout << "Closing connection" << endl;
+    spdlog::info("Closing RSP connection");
     close(clientFd);
     clientFd = -1;
   }
@@ -312,9 +310,8 @@ bool RspConnection::getPkt(RspPacket *pkt) {
       // If the checksums don't match print a warning, and put the
       // negative ack back to the client. Otherwise put a positive ack.
       if (checksum != xmitcsum) {
-        cerr << "Warning: Bad RSP checksum: Computed 0x" << setw(2)
-             << setfill('0') << hex << checksum << ", received 0x" << xmitcsum
-             << setfill(' ') << dec << endl;
+        spdlog::warn("Bad RSP checksum: Computed 0x{:02x}, received 0x{:02x}",
+                     checksum, xmitcsum);
         if (!putRspChar('-'))  // Failed checksum
         {
           return false;  // Comms failure
@@ -331,7 +328,7 @@ bool RspConnection::getPkt(RspPacket *pkt) {
         }
       }
     } else {
-      cerr << "Warning: RSP packet overran buffer" << endl;
+      spdlog::warn("RSP packet overran buffer");
     }
   }
 
@@ -417,8 +414,7 @@ bool RspConnection::putPkt(RspPacket *pkt) {
 //-----------------------------------------------------------------------------
 bool RspConnection::putRspChar(char c) {
   if (-1 == clientFd) {
-    cerr << "Warning: Attempt to write '" << c
-         << "' to unopened RSP client: Ignored" << endl;
+    spdlog::warn("Attempt to write '{}' to unopened RSP client: Ignored", c);
     return false;
   }
 
@@ -429,8 +425,9 @@ bool RspConnection::putRspChar(char c) {
       case -1:
         // Error: only allow interrupts or would block
         if ((EAGAIN != errno) && (EINTR != errno)) {
-          cerr << "Warning: Failed to write to RSP client: "
-               << "Closing client connection: " << strerror(errno) << endl;
+          spdlog::warn("Failed to write to RSP client: Closing client "
+                       "connection: {}",
+                       strerror(errno));
           return false;
         }
 
@@ -455,8 +452,8 @@ bool RspConnection::putRspChar(char c) {
 //-----------------------------------------------------------------------------
 bool RspConnection::putRspStr(char *const buf, const size_t len) {
   if (-1 == clientFd) {
-    cerr << "Warning: Attempt to write '" << std::string(buf)
-         << "' to unopened RSP client: Ignored" << endl;
+    spdlog::warn("Attempt to write '{}' to unopened RSP client: Ignored",
+                 std::string(buf));
     return false;
   }
 
@@ -467,8 +464,9 @@ bool RspConnection::putRspStr(char *const buf, const size_t len) {
       case -1:
         // Error: only allow interrupts or would block
         if ((EAGAIN != errno) && (EINTR != errno)) {
-          cerr << "Warning: Failed to write to RSP client: "
-               << "Closing client connection: " << strerror(errno) << endl;
+          spdlog::warn("Failed to write to RSP client: Closing client "
+                       "connection: {}",
+                       strerror(errno));
           return false;
         }
 
@@ -493,8 +491,7 @@ bool RspConnection::putRspStr(char *const buf, const size_t len) {
 //-----------------------------------------------------------------------------
 int RspConnection::getRspChar() {
   if (-1 == clientFd) {
-    cerr << "Warning: Attempt to read from "
-         << "unopened RSP client: Ignored" << endl;
+    spdlog::warn("Attempt to read from unopened RSP client: Ignored");
     return -1;
   }
 
@@ -507,8 +504,9 @@ int RspConnection::getRspChar() {
       case -1:
         // Error: only allow interrupts
         if (EINTR != errno) {
-          cerr << "Warning: Failed to read from RSP client: "
-               << "Closing client connection: " << strerror(errno) << endl;
+          spdlog::warn("Failed to read from RSP client: Closing client "
+                       "connection: {}",
+                       strerror(errno));
           return -1;
         }
         break;
